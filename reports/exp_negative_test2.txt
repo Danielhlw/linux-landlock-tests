@@ -1,0 +1,24 @@
+Falhas:
+- Tentar usar :fd() em um objeto de fs.open, mas ele é só um file_descriptor sem esse método
+- Solução foi varrer o /proc/self/fd e comparar o symlink com t_append.txt, que retorna o <n> de /proc/self/fd/<n> que preciso
+
+Funcionamento da function find_fd_for_target:
+> fs.canonical(p) tenta resolver o caminho absoluto e real do arquivo, ou seja, remove ./..,
+    - Cai num pcall, se der tudo certo, want = tostring(canon;), se não funcionar, tenta com want = tostring(p)
+    - Se o (p) for canonizado, aumenta a chance da comparação bater
+> Varre descriptores possíveis
+    - O for constrói o caminho /proc/self/fd/n para cada valor (0, 1 e 2 não atrapalham, são stdin/stdout/stder)
+> Lê o alvo do link de cada /proc/self/fd/n
+    - fs.read_symlink(link) lê o apontamento do arquivo (/x/y/../../t_append.txt), dentro de um pcall para controlar fd inexistentes/fechados
+    - se der certo, converte para uma string: got = tostring(tp)
+> Comparação por sufixo
+    - if got:sub(-#want) == want then return n end (quer dizer algo como "o fim de got é igual a want?")
+> Retorno
+    - Se encontrar, retorna o número <n> do FD 
+    - Se varrer tudo e não achar, retorna nil
+
+
+Ordens dos FDs:
+- Manter o RO FD aberto apenas para existir em /proc/self/fd
+- Reabrir para escrita via /proc/self/fd/<n>
+- Fechar tudo (o random_acess:close() fecha o FD reaberto, o file.stream.new(ro_fd):close() fecha o RO).

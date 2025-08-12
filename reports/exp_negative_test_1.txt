@@ -7,5 +7,5 @@
     - Abre o arquivo read only e obtém um fd
     - Cria um stream sobre o arquivo, sem mudar o modo dele, então continua sendo read only
         - write_some tenta escrever bytes em um fd aberto como read only
-        - O kernel rejeita a operação e retorna Bad file descriptor
+        - O kernel rejeita a operação e retorna Bad file descriptor (o que é o esperado)
         

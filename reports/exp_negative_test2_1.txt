@@ -1,0 +1,5 @@
+> Atualização:
+    - Ao invés de usar um loop para varrer os fd, bastou pegar o path do /dev/fd/<n>, que é o mesmo de /proc/self/fd
+    - Uso de "regex" para capturar o valor do fd <n>
+
+    

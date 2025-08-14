@@ -1,0 +1,8 @@
+line via /dev/fd reopen (probe)
+line via /dev/fd reopen (probe)
+line via /dev/fd reopen (probe)
+line via /dev/fd reopen (probe)
+line via /dev/fd reopen (probe)
+line via /dev/fd reopen (probe)
+line via /dev/fd reopen (probe)
+line via /dev/fd reopen (probe2)

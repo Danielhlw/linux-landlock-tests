@@ -23,7 +23,7 @@ if not wr_fd then
 end
 
 local ra = file.random_access.new(wr_fd)
-local written = file.write_all_at(ra, ra.size, "line via /dev/fd reopen (probe2)\n")
+local written = file.write_all_at(ra, ra.size, "line via /dev/fd reopen (probe2212)\n")
 
 ra:close()
 file.stream.new(ro_fd):close()

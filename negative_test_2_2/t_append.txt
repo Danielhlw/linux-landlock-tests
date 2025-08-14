@@ -1,0 +1,1 @@
+line via reopen (found via /dev/fd, reopened via /proc/self/fd)

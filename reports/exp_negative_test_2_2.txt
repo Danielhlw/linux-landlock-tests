@@ -1,0 +1,2 @@
+> Atualizações
+    - Reopen pelo caminho “real”: o reabrir do FD passou de /dev/fd/<n> para /proc/self/fd/<n>. Como /dev/fd é symlink de /proc/self/fd, o alvo é o mesmo

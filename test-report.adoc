@@ -1,0 +1,60 @@
+== Practical validation of file reopen via /proc/self/fd/<N> and Landlock:
+
+Prove that it is possible to reopen a file and write (append) with Emilua by reopening the descriptor via /proc/self/fd/<N> (or /dev/fd/<N>, which on Linux usually points to /proc/self/fd).
+
+Test whether this can be blocked with Landlock (making the “normal” tree read-only) using /proc/self/fd/<N> as the vector and also validate that Landlock blocks writes through the “normal” path.
+
+== The reopen via /proc/self/fd/<N> (which is a bypass), works. But not with landlock
+
+The /proc/self/fd/<N> is a directory in procfs that lists, as magic symlinks, all file descriptors opened by the current process. Each “N” entry points to the real file associated with descriptor N. Opening that entry with open() reopens the same underlying file, creating a new descriptor (independent from the original).
+https://man7.org/linux/man-pages/man5/proc_pid_fd.5.html (there is the magic symlincs part here too, it is interesting)
+
+What changes when “reopening”: when calling open("/proc/self/fd/N", O_WRONLY|O_APPEND) the kernel performs a new open operation on the same file (same inode), evaluating permissions at the moment of the open and applying the new requested flags (e.g., write/append). The fact that the original FD was opened as R/O does not prevent the reopened one from requesting write — what matters are the file permissions and the policies that intercept that specific open. (On Linux, this reopening via /proc/self/fd is not a dup(); it is indeed a new open() on the same target.)
+https://blog.gnoack.org/post/proc-fd-is-not-dup/
+
+When it works or fails:
+
+It works if: (a) the file/FS allows write by the caller (DAC/ACL/umask etc.), and (b) there is no mechanism that intercepts and denies that specific open via procfs.
+
+It fails if: write permissions do not exist (DAC), the file is read-only (mount/FS), or another policy (e.g., seccomp filtering write open*, mount namespace without /proc, etc.) blocks the call.
+
+== Kernel limitation (about Landlock)
+    * Landlock is an LSM (Linux Security Module) that allows restricting access to files and directories in an unprivileged way. It is useful for isolating subprocesses and limiting their actions, but it has some important limitations.
+    * Landlock restricts “regular files and directories” anchored in a directory of the FS (path_beneath rule).
+
+    * But it does not cover procfs (and some other special kernel filesystems). The official documentation itself says:
+
+    “Access to regular files and directories can be restricted by Landlock… However, files that do not come from a user-visible filesystem (e.g. pipe, socket), but can still be accessed through /proc/<pid>/fd/*, cannot currently be explicitly restricted. Likewise, some special kernel filesystems such as nsfs, which can be accessed through /proc/<pid>/ns/*, cannot currently be explicitly restricted.” 
+    https://docs.kernel.org/userspace-api/landlock.html
+
+    * In practical terms: when I tried to anchor a Landlock rule on /proc//proc/self/fd, I received EINVAL when adding the rule — consistent with the limitation above (it is not a “normal” tree that Landlock path_beneath knows how to mediate). The documentation also makes clear the requirements for landlock_add_rule() and lists typical errors; in my setup, the determining factor was indeed the filesystem type. 
+
+
+== Some explanations of the test
+
+* Landlock is applied with landlock_restrict_self() and requires no_new_privs beforehand. The correct application of the policy is done at the beginning of the subprocess.
+
+* For a path_beneath rule, I need to anchor on a real directory — in practice, open that directory with low-level flags (e.g., O_PATH | O_DIRECTORY) and use it as parent_fd.That is why I use the init.script (which exposes syscalls/flags) to open the anchor directory and then call the Landlock functions. (The Landlock part in Emilua is documented at the routes system.landlock_create_ruleset, system.landlock_add_rule, system.landlock_restrict_self.)
+
+== End
+
+* For what I wanted to validate: yes, the reopen via /proc/self/fd/<N> works in Emilua, and with sandbox; and no, Landlock (today) does not cover this
+
+
+== References
+
+* [1]: https://docs.kernel.org/userspace-api/landlock.html "Landlock: unprivileged access control"
+* [2]: https://www.kernel.org/doc/html/v6.5/userspace-api/landlock.html "Landlock: unprivileged access control"
+*[3]: https://docs.emilua.org/api/0.11/ref/system.landlock_create_ruleset.html "system.landlock_create_ruleset"
+* [4]: https://man7.org/linux/man-pages/man5/proc_pid_fd.5.html "proc_pid_fd(5) - Linux manual page"
+* [5]: https://man7.org/linux/man-pages/man5/proc.5.html "proc(5) - Linux manual page"
+* [6]: https://www.kernel.org/doc/html/v6.1/userspace-api/landlock.html "Landlock: unprivileged access control"
+* [7]: https://docs.emilua.org/api/0.8/ref/system.seccomp_set_mode_filter.html "system.seccomp_set_mode_filter"
+* [8]: https://docs.kernel.org/security/landlock.html "Landlock LSM: kernel documentation"
+* [9]: https://man7.org/linux/man-pages/man7/landlock.7.html "landlock(7) - Linux manual page"
+* [10]: https://man7.org/linux/man-pages/man2/landlock_create_ruleset.2.html "landlock_create_ruleset(2) - Linux manual page"
+* [11]: https://man7.org/linux/man-pages/man2/landlock_add_rule.2.html "landlock_add_rule(2) - Linux manual page"
+* [12]: https://unix.stackexchange.com/questions/18255/how-does-dev-fd-relate-to-proc-self-fd "How does /dev/fd relate to /proc/self/fd"
+* [13]: https://docs.emilua.org/api/0.11/ref/system.landlock_add_rule.html "system.landlock_add_rule"
+* [14]: https://docs.emilua.org/api/0.11/ref/system.landlock_restrict_self.html "system.landlock_restrict_self"
+* [15]: https://emilua.gitlab.io/docs/api/0.4/tutorial/linux_namespaces.html "Linux namespaces :: Emilua docs"
